@@ -1,11 +1,35 @@
+from django.core.cache import cache
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.core.cache import cache
+
 from .serializers import AccountCreateSerializer, AccountVerifySerializer
 
 
 class AccountCreateAPIView(APIView):
+    @swagger_auto_schema(
+        operation_summary='Create Account',
+        operation_description='Password need containing at least 1 uppercase letter, 1 lowercase letter, and 1 number',
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'username': openapi.Schema(type=openapi.TYPE_STRING, minLength=3, maxLength=32),
+                'password': openapi.Schema(type=openapi.TYPE_STRING, minLength=8, maxLength=32)},
+            required=['username', 'password']),
+        responses={
+            status.HTTP_201_CREATED: openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={'success': openapi.Schema(type=openapi.TYPE_BOOLEAN)},
+                required=['success']
+            ),
+            status.HTTP_400_BAD_REQUEST: openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                    'reason': openapi.Schema(type=openapi.TYPE_STRING)},
+                required=['success', 'reason'])})
     def post(self, request):
         serializer = AccountCreateSerializer(data=request.data)
         if serializer.is_valid():
@@ -17,6 +41,27 @@ class AccountCreateAPIView(APIView):
 
 
 class AccountVerifyAPIView(APIView):
+    @swagger_auto_schema(
+        operation_summary='Verify Account and Password',
+        operation_description='If the password verification fails 5 times, the user should wait 1 minute before attempting to verify the password again',
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            properties={
+                'username': openapi.Schema(type=openapi.TYPE_STRING, minLength=3, maxLength=32, ),
+                'password': openapi.Schema(type=openapi.TYPE_STRING, minLength=8, maxLength=32)},
+            required=['username', 'password']),
+        responses={
+            status.HTTP_200_OK: openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={'success': openapi.Schema(type=openapi.TYPE_BOOLEAN)},
+                required=['success']
+            ),
+            status.HTTP_400_BAD_REQUEST: openapi.Schema(
+                type=openapi.TYPE_OBJECT,
+                properties={
+                    'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                    'reason': openapi.Schema(type=openapi.TYPE_STRING)},
+                required=['success', 'reason']), })
     def post(self, request):
         username = request.data.get('username')
         failure_key = f"login_failure_{username}"

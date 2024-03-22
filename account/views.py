@@ -1,3 +1,5 @@
+import logging
+
 from django.core.cache import cache
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
@@ -6,6 +8,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .serializers import AccountCreateSerializer, AccountVerifySerializer
+
+logger = logging.getLogger('django.request')
 
 
 class AccountCreateAPIView(APIView):
@@ -34,9 +38,13 @@ class AccountCreateAPIView(APIView):
         serializer = AccountCreateSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
+            logger.info(f"Account creation successful for user: {request.data.get('username')}",
+                        extra={'request': request})
             return Response({"success": True}, status=status.HTTP_201_CREATED)
         else:
             reason = next(iter(serializer.errors.values()))[0]
+            logger.warning(f"Account creation failed for user: {request.data.get('username')} - Reason: {reason}",
+                           extra={'request': request})
             return Response({"success": False, "reason": reason}, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -67,6 +75,7 @@ class AccountVerifyAPIView(APIView):
         failure_key = f"login_failure_{username}"
         failures = cache.get(failure_key, 0)
         if failures >= 5:
+            logger.warning(f"Too many failed login attempts for user: {username}", extra={'request': request})
             return Response(
                 {"success": False, "reason": "Too many failed login attempts. Please try again in 1 minute."},
                 status=status.HTTP_429_TOO_MANY_REQUESTS)
@@ -74,8 +83,11 @@ class AccountVerifyAPIView(APIView):
         serializer = AccountVerifySerializer(data=request.data)
         if serializer.is_valid():
             cache.set(failure_key, 0, timeout=None)
+            logger.info(f"Account verification successful for user: {username}", extra={'request': request})
             return Response({"success": True}, status=status.HTTP_200_OK)
         else:
             cache.set(failure_key, failures + 1, timeout=60)
             reason = next(iter(serializer.errors.values()))[0]
+            logger.warning(f"Account verification failed for user: {username} - Reason: {reason}",
+                           extra={'request': request})
             return Response({"success": False, "reason": reason}, status=status.HTTP_400_BAD_REQUEST)
